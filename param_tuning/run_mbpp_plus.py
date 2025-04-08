@@ -17,6 +17,8 @@ from vllm.dataset import (
     MbppPlusDataset,
 )
 
+from util import maybe_destroy_process_group, get_quant_configs_and_groups
+
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -34,7 +36,8 @@ def add_code_generation_requests(
     engine: LLMEngine,
     dataset: CodeGenerationDataset,
     questions: List[CodeGenerationQuestion],
-    quant_configs: List[Tuple[int]],
+    quant_configs: List[int],
+    quant_groups: List[int],
     compress_configs: List[float],
 ) -> None:
     global REQUEST_ID
@@ -46,8 +49,8 @@ def add_code_generation_requests(
                 request_id=str(REQUEST_ID), 
                 prompt=prompt, 
                 sampling_params=sampling_params,
-                attn_prune_thresh=0.0,
                 quant_configs=quant_configs, 
+                quant_groups=quant_groups,
                 compress_configs=compress_configs,
             )
             dataset.register_request(question, str(REQUEST_ID))
@@ -97,13 +100,8 @@ def run_mbpp_plus_dataset(
     total_questions = len(dataset.dataset[label])
     print('total_questions = ', total_questions)
     
-    if kbits_high == kbits_low and vbits_high == vbits_low:
-        quant_configs = [kbits_high, vbits_high]
-    else:
-        quant_configs = [kbits_high, vbits_high, 
-                         kbits_low, vbits_low]
-    # compress_configs = [kv_prune_thresh, kv_quant_thresh, 
-    #                     kv_prune_ratio, kv_quant_ratio]
+    quant_configs, quant_groups = get_quant_configs_and_groups(
+        kbits_high, vbits_high, kbits_low, vbits_low)
     compress_configs = [kv_prune_thresh, kv_quant_thresh]
 
     # # 287113 lines in 'train'   
@@ -127,7 +125,7 @@ def run_mbpp_plus_dataset(
         all_questions = all_questions[batch_size:]
         
         add_code_generation_requests(
-            engine, dataset, questions, quant_configs, compress_configs)
+            engine, dataset, questions, quant_configs, quant_groups, compress_configs)
 
         while engine.has_unfinished_requests():
             request_outputs: List[RequestOutput] = engine.step()
@@ -182,6 +180,8 @@ def main(args: argparse.Namespace):
         kv_quant_thresh=args.kv_quant_thresh,
     )
     print(f'--- time elapsed = {time.time() - t0}s ---')
+    
+    maybe_destroy_process_group()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

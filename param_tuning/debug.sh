@@ -1,7 +1,7 @@
-export PYTHONPATH=/home/zhangyanqi/Projects/eLLM:$PYTHONPATH
+export PYTHONPATH=/home/zhangyanqi/git_repos/DiffKV:$PYTHONPATH
 # # gsm8k 88-88
 CUDA_VISIBLE_DEVICES=4,5 RAY_DEDUP_LOGS=0 \
-    python3 /home/zhangyanqi/Projects/eLLM/param_tuning/run_gsm8k.py \
+    python3 /home/zhangyanqi/git_repos/DiffKV/param_tuning/run_gsm8k.py \
         --model /data1/modelscope/Qwen2.5-32B-Instruct \
         --load-format safetensors \
         --enforce-eager \

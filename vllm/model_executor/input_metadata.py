@@ -27,14 +27,15 @@ class InputMetadata:
         block_size: Optional[int],
         block_tables: Optional[torch.Tensor],
         kv_len_tables: Optional[torch.Tensor],
-        sparsity_tables: Optional[torch.Tensor],
-        # attention sparsity config
-        attn_prune_thresh: float,
         # kv cache quant configs
         num_bits_k_high: int,
         num_bits_v_high: int,
         num_bits_k_low: int,
         num_bits_v_low: int,
+        num_chunks_k_high: int,
+        num_chunks_v_high: int,
+        num_chunks_k_low: int,
+        num_chunks_v_low: int,
         compress_config_tables: Optional[torch.Tensor],
         # cache block layout
         key_vec_size: int,
@@ -52,16 +53,17 @@ class InputMetadata:
         self.block_size = block_size
         self.block_tables = block_tables
         self.kv_len_tables = kv_len_tables
-        self.sparsity_tables = sparsity_tables
-        
-        # sparse attention compute
-        self.attn_prune_thresh = attn_prune_thresh
         
         # kv cache quant & pruning configs
         self.num_bits_k_high = num_bits_k_high
         self.num_bits_v_high = num_bits_v_high
-        self.num_bits_k_low = num_bits_k_low
-        self.num_bits_v_low = num_bits_v_low
+        self.num_bits_k_low  = num_bits_k_low
+        self.num_bits_v_low  = num_bits_v_low
+        self.num_chunks_k_high = num_chunks_k_high
+        self.num_chunks_v_high = num_chunks_v_high
+        self.num_chunks_k_low  = num_chunks_k_low
+        self.num_chunks_v_low  = num_chunks_v_low
+        
         self.compress_config_tables = compress_config_tables
 
         # cache block layout
@@ -88,6 +90,10 @@ class InputMetadata:
                 f"num_bits_v_high={self.num_bits_v_high}, "
                 f"num_bits_k_low={self.num_bits_k_low}, "
                 f"num_bits_v_low={self.num_bits_v_low}, "
+                f"num_chunks_k_high={self.num_chunks_k_high}, "
+                f"num_chunks_v_high={self.num_chunks_v_high}, "
+                f"num_chunks_k_low={self.num_chunks_k_low}, "
+                f"num_chunks_v_low={self.num_chunks_v_low}, "
                 f"num_tokens_per_block_high={self.num_tokens_per_block_high}, "
                 f"num_tokens_per_block_low={self.num_tokens_per_block_low}, "
                 f"use_cuda_graph={self.use_cuda_graph})")

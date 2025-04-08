@@ -294,6 +294,9 @@ def main(args: argparse.Namespace):
     model_gen = args.model_gen
     model_size = args.model_size
     
+    global GPUS
+    GPUS = [i + args.start_gpu_id for i in GPUS]
+    
     if args.model == 'llama':
         if model_gen == 2:
             assert model_size in [7, 13, 70]
@@ -332,26 +335,26 @@ def main(args: argparse.Namespace):
         if 1000 * args.kv_quant_thresh == int(1000 * args.kv_quant_thresh):
             args.log_path = (f'{args.log_path}/{_subdir}/'
                             f'k{args.kbits_high}v{args.vbits_high}_k{args.kbits_low}v{args.vbits_low}/'
-                            f'target_{int(100 *args.target_mem_util)}_buffer_{args.kv_buffer}/'
+                            f'buffer_{args.kv_buffer}/'
                             f'p{int(1000 * args.kv_prune_thresh)}_q{int(1000 * args.kv_quant_thresh)}/'
                             )
         else:
             args.log_path = (f'{args.log_path}/{_subdir}/'
                             f'k{args.kbits_high}v{args.vbits_high}_k{args.kbits_low}v{args.vbits_low}/'
-                            f'target_{int(100 *args.target_mem_util)}_buffer_{args.kv_buffer}/'
+                            f'buffer_{args.kv_buffer}/'
                             f'p{int(1000 * args.kv_prune_thresh)}_q{round(1000 * args.kv_quant_thresh, 1)}/'
                             )
     else:
         if 1000 * args.kv_quant_thresh == int(1000 * args.kv_quant_thresh):
             args.log_path = (f'{args.log_path}/{_subdir}/'
                             f'k{args.kbits_high}v{args.vbits_high}_k{args.kbits_low}v{args.vbits_low}/'
-                            f'target_{int(100 *args.target_mem_util)}_buffer_{args.kv_buffer}/'
+                            f'buffer_{args.kv_buffer}/'
                             f'p{round(int(1000 * args.kv_prune_thresh), 1)}_q{int(1000 * args.kv_quant_thresh)}/'
                             )
         else:
             args.log_path = (f'{args.log_path}/{_subdir}/'
                             f'k{args.kbits_high}v{args.vbits_high}_k{args.kbits_low}v{args.vbits_low}/'
-                            f'target_{int(100 *args.target_mem_util)}_buffer_{args.kv_buffer}/'
+                            f'buffer_{args.kv_buffer}/'
                             f'p{round(int(1000 * args.kv_prune_thresh), 1)}_q{round(1000 * args.kv_quant_thresh, 1)}/'
                             )
     # print(args.log_path)
@@ -362,7 +365,7 @@ def main(args: argparse.Namespace):
     sample_rate = args.sample_rate
     
     if sample_rate is not None:
-        assert args.dataset in ['minerva_math', 'aime', 'mmlu_pro_cot']
+        assert args.dataset in ['minerva_math', 'aime']
     
     if num_samples == 0:
         # dataset config
@@ -379,10 +382,7 @@ def main(args: argparse.Namespace):
         elif args.dataset == 'mmlu_cot':
             num_samples = len(MMLUCoTDataset().dataset[label])
         elif args.dataset == 'mmlu_pro_cot':
-            _sample_rate = sample_rate
-            if not _sample_rate:
-                _sample_rate = 100
-            num_samples = len(MMLUProCoTDataset(sample_percent=_sample_rate).test_set)
+            num_samples = len(MMLUProCoTDataset().dataset[label])
         elif args.dataset == 'gpqa':
             num_samples = len(GPQACoTDataset().dataset)
         elif args.dataset == 'aime':
@@ -442,6 +442,7 @@ if __name__ == "__main__":
     parser.add_argument('--sample-rate', type=int, default=None)
     parser.add_argument('--num-samples', type=int, default=0)
     parser.add_argument('--batch-size', type=int, default=0)
+    parser.add_argument('--start-gpu-id', type=int, default=0)
     
     # dataset specific compression params
     parser.add_argument('--kv-buffer', type=int, default=32)
@@ -451,7 +452,6 @@ if __name__ == "__main__":
     parser.add_argument('--vbits-low', type=int, required=True)
     parser.add_argument('--kv-prune-thresh', type=float, required=True)
     parser.add_argument('--kv-quant-thresh', type=float, required=True)
-    parser.add_argument('--target-mem-util', type=float, required=True)
     # parser.add_argument('--kv-prune-ratio', type=float, required=True)
     # parser.add_argument('--kv-quant-ratio', type=float, required=True)
     

@@ -19,7 +19,7 @@ def qwq_doc_to_text(doc: dict) -> str:
 def doc_to_text(doc: dict) -> str:
     return doc["question"] + r" Please reason step by step, and put your final answer within \boxed{}."         
 
-def process_results(ground_truth, results: List[str]) -> Dict[str, int]:
+def process_results(ground_truth, results: List[str]) -> bool:
     candidates = results[0]
 
     try:
@@ -31,7 +31,7 @@ def process_results(ground_truth, results: List[str]) -> Dict[str, int]:
     except Exception as e:
         print(f"Exception: {e}")
         mathval = False
-        
+    
     # print(f"*********** gt_answer:{ground_truth} | result:{answer}, correct = {mathval} ***********")
 
     return mathval

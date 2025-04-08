@@ -16,6 +16,8 @@ from vllm.dataset import (
     MMLUProCoTDataset,
 )
 
+from util import maybe_destroy_process_group, get_quant_configs_and_groups
+
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -33,7 +35,8 @@ def add_mmlu_pro_cot_questions(
     engine: LLMEngine,
     dataset: MMLUProCoTDataset,
     questions: List[MMLUProCoTQuestion],
-    quant_configs: List[Tuple[int]],
+    quant_configs: List[int],
+    quant_groups: List[int],
     compress_configs: List[float],
 ) -> None:
     global REQUEST_ID
@@ -43,8 +46,8 @@ def add_mmlu_pro_cot_questions(
             request_id=str(REQUEST_ID),
             prompt=prompt,
             sampling_params=SamplingParams,
-            attn_prune_thresh=0.0,
             quant_configs=quant_configs, 
+            quant_groups=quant_groups, 
             compress_configs=compress_configs,
         )
         dataset.register_request(question, str(REQUEST_ID))
@@ -73,7 +76,6 @@ def run_mmlu_pro_cot_dataset(
     batch_size: int,
     indices: List[int],
     log_path: str,
-    sample_rate: int,
     kbits_high: int,
     vbits_high: int,
     kbits_low: int,
@@ -87,19 +89,15 @@ def run_mmlu_pro_cot_dataset(
     ''' Args
     num_lines: how many lines to batch
     '''
-    dataset = MMLUProCoTDataset(sample_percent=sample_rate)
+    dataset = MMLUProCoTDataset()
     total_questions = len(dataset.test_set)
     print('total_questions = ', total_questions)
 
     
-    if kbits_high == kbits_low and vbits_high == vbits_low:
-        quant_configs = [kbits_high, vbits_high]
-    else:
-        quant_configs = [kbits_high, vbits_high, 
-                         kbits_low, vbits_low]
-    # compress_configs = [kv_prune_thresh, kv_quant_thresh, 
-    #                     kv_prune_ratio, kv_quant_ratio]
+    quant_configs, quant_groups = get_quant_configs_and_groups(
+        kbits_high, vbits_high, kbits_low, vbits_low)
     compress_configs = [kv_prune_thresh, kv_quant_thresh]
+    
     # disable real-time perf logging
     engine.log_stats = not quiet
     
@@ -116,7 +114,7 @@ def run_mmlu_pro_cot_dataset(
         all_questions = all_questions[batch_size:]
         
         add_mmlu_pro_cot_questions(
-            engine, dataset, questions, quant_configs, compress_configs)
+            engine, dataset, questions, quant_configs, quant_groups, compress_configs)
 
         while engine.has_unfinished_requests():
             request_outputs: List[RequestOutput] = engine.step()
@@ -163,8 +161,7 @@ def main(args: argparse.Namespace):
         engine=engine, 
         batch_size=batch_size * 5, 
         indices=indices, 
-        log_path=args.log_path,
-        sample_rate=args.sample_rate, 
+        log_path=args.log_path, 
         kbits_high=args.kbits_high,
         vbits_high=args.vbits_high,
         kbits_low=args.kbits_low,
@@ -173,6 +170,8 @@ def main(args: argparse.Namespace):
         kv_quant_thresh=args.kv_quant_thresh,
         )
     print(f'--- time elapsed = {time.time() - t0}s ---')
+    
+    maybe_destroy_process_group()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -183,7 +182,6 @@ if __name__ == "__main__":
     parser.add_argument('--indices-csv', type=str, required=True)
     parser.add_argument('--prompt-limit', type=int, required=True)
     parser.add_argument('--data-label', type=str, default='test')
-    parser.add_argument('--sample-rate', type=int, default=100)
     # dataset specific compression params
     parser.add_argument('--kbits-high', type=int, required=True)
     parser.add_argument('--vbits-high', type=int, required=True)

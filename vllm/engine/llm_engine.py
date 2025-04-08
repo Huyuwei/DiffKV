@@ -91,6 +91,15 @@ class LLMEngine:
             trust_remote_code=model_config.trust_remote_code,
             tokenizer_revision=model_config.tokenizer_revision,
             revision=model_config.revision)
+
+        if len(self.tokenizer) != self.model_config.get_vocab_size():
+            logger.warning(
+                f"The tokenizer's vocabulary size {len(self.tokenizer)}"
+                f" does not match the model's vocabulary size "
+                f"{self.model_config.get_vocab_size()}. This might "
+                f"cause an error in decoding. Please change config.json "
+                "to match the tokenizer's vocabulary size.")
+        self.tokenizer_len = len(self.tokenizer)
         self.seq_counter = Counter()
 
         # GPU cluster orchestration
@@ -191,8 +200,8 @@ class LLMEngine:
         request_id: str,
         prompt: Optional[str],
         sampling_params: SamplingParams,
-        attn_prune_thresh: float,
         quant_configs: List[int],
+        quant_groups: List[int],
         compress_configs: List[float],
         prompt_token_ids: Optional[List[int]] = None,
         arrival_time: Optional[float] = None,
@@ -214,6 +223,8 @@ class LLMEngine:
                 the current monotonic time.
             quant_configs: KV cache quantization configs
                 [kbits_high_precision, vbits_high_precision, kbits_low_precision, vbits_low_precision]
+            quant_groups: KV cache quantization configs
+                [kgroups_high_precision, vgroups_high_precision, kgroups_low_precision, vgroups_low_precision]
             compress_configs: KV cache compression configs (thresholds for quant & prune)
                 [prune_ratio, quant_ratio]
         """
@@ -237,7 +248,7 @@ class LLMEngine:
         # Create the sequence group.
         seq_group = SequenceGroup(request_id, [seq], sampling_params,
                                   arrival_time,
-                                  attn_prune_thresh, quant_configs, compress_configs)
+                                  quant_configs, quant_groups, compress_configs)
 
         # Add the sequence group to the scheduler.
         self.scheduler.add_seq_group(seq_group)
@@ -654,6 +665,7 @@ class LLMEngine:
         (new_tokens, new_output_text, prefix_offset,
          read_offset) = detokenize_incrementally(
              self.tokenizer,
+             self.tokenizer_len,
              all_input_ids=seq.get_token_ids(),
              prev_tokens=seq.tokens,
              prefix_offset=seq.prefix_offset,
@@ -673,8 +685,8 @@ class LLMEngine:
             len(seq.tokens) >= len(prms.truth_token_ids):
             seq.emulated_output_text += new_output_text
 
-        # TODO (yanqi): for debug purposes. Remove later
-        # print(f'seq_id: {seq.seq_id}, new_tokens: {new_tokens}, recent texts: {seq.output_text[-50:]}')
+        # # TODO(yanqi): for debug purposes. Remove later
+        # print(f'seq_id: {seq.seq_id}, new_tokens: {new_tokens}, recent texts: {seq.output_text[-5:]}')
 
     def _check_stop(self, seq: Sequence,
                     sampling_params: SamplingParams) -> None:        

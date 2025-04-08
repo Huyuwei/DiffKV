@@ -81,7 +81,6 @@ class ModelRunner:
         seq_group_metadata_list: List[SequenceGroupMetadata],
         block_tables: Optional[torch.Tensor],
         kv_len_tables: Optional[torch.Tensor],
-        sparsity_tables: Optional[torch.Tensor],
         compress_config_tables: Optional[torch.Tensor],
         key_vec_size: int,
         val_vec_size: int,
@@ -145,10 +144,16 @@ class ModelRunner:
 
         quant_config_high = (
             seq_group_metadata_list[0].num_bits_k_high,
-            seq_group_metadata_list[0].num_bits_v_high)
+            seq_group_metadata_list[0].num_bits_v_high,
+            seq_group_metadata_list[0].num_chunks_k_high,
+            seq_group_metadata_list[0].num_chunks_v_high,
+        )
         quant_config_low = (
             seq_group_metadata_list[0].num_bits_k_low,
-            seq_group_metadata_list[0].num_bits_v_low)
+            seq_group_metadata_list[0].num_bits_v_low,
+            seq_group_metadata_list[0].num_chunks_k_low,
+            seq_group_metadata_list[0].num_chunks_v_low,
+        )
 
         # We don't need input_positions as it's obvious for prompt
         if self.cache_config is not None:
@@ -174,12 +179,14 @@ class ModelRunner:
             block_size=self.block_size,
             block_tables=block_tables,
             kv_len_tables=kv_len_tables,
-            sparsity_tables=sparsity_tables,
-            attn_prune_thresh=seq_group_metadata_list[0].attn_prune_thresh,
             num_bits_k_high=seq_group_metadata_list[0].num_bits_k_high,
             num_bits_v_high=seq_group_metadata_list[0].num_bits_v_high,
             num_bits_k_low=seq_group_metadata_list[0].num_bits_k_low,
             num_bits_v_low=seq_group_metadata_list[0].num_bits_v_low,
+            num_chunks_k_high=seq_group_metadata_list[0].num_chunks_k_high,
+            num_chunks_v_high=seq_group_metadata_list[0].num_chunks_v_high,
+            num_chunks_k_low=seq_group_metadata_list[0].num_chunks_k_low,
+            num_chunks_v_low=seq_group_metadata_list[0].num_chunks_v_low,
             compress_config_tables=compress_config_tables,
             key_vec_size=key_vec_size,
             val_vec_size=val_vec_size,
@@ -195,7 +202,6 @@ class ModelRunner:
         seq_group_metadata_list: List[SequenceGroupMetadata],
         block_tables: Optional[torch.Tensor],
         kv_len_tables: Optional[torch.Tensor],
-        sparsity_tables: Optional[torch.Tensor],
         compress_config_tables: Optional[torch.Tensor],
         key_vec_size: int,
         val_vec_size: int,
@@ -254,13 +260,19 @@ class ModelRunner:
         input_tokens = torch.tensor(input_tokens, dtype=torch.int, device=device)
         input_positions = torch.tensor(input_positions, dtype=torch.int, device=device)
         slot_ids = torch.tensor(slot_ids, dtype=torch.int, device=device)
-
+        
         quant_config_high = (
             seq_group_metadata_list[0].num_bits_k_high,
-            seq_group_metadata_list[0].num_bits_v_high)
+            seq_group_metadata_list[0].num_bits_v_high,
+            seq_group_metadata_list[0].num_chunks_k_high,
+            seq_group_metadata_list[0].num_chunks_v_high,
+        )
         quant_config_low = (
             seq_group_metadata_list[0].num_bits_k_low,
-            seq_group_metadata_list[0].num_bits_v_low)
+            seq_group_metadata_list[0].num_bits_v_low,
+            seq_group_metadata_list[0].num_chunks_k_low,
+            seq_group_metadata_list[0].num_chunks_v_low,
+        )
 
         if self.cache_config is not None:
             num_tokens_per_block_high = self.cache_config.quantized_block_num_tokens[quant_config_high]
@@ -279,12 +291,14 @@ class ModelRunner:
             block_size=self.block_size,
             block_tables=block_tables,
             kv_len_tables=kv_len_tables,
-            sparsity_tables=sparsity_tables,
-            attn_prune_thresh=seq_group_metadata_list[0].attn_prune_thresh,
             num_bits_k_high=seq_group_metadata_list[0].num_bits_k_high,
             num_bits_v_high=seq_group_metadata_list[0].num_bits_v_high,
             num_bits_k_low=seq_group_metadata_list[0].num_bits_k_low,
             num_bits_v_low=seq_group_metadata_list[0].num_bits_v_low,
+            num_chunks_k_high=seq_group_metadata_list[0].num_chunks_k_high,
+            num_chunks_v_high=seq_group_metadata_list[0].num_chunks_v_high,
+            num_chunks_k_low=seq_group_metadata_list[0].num_chunks_k_low,
+            num_chunks_v_low=seq_group_metadata_list[0].num_chunks_v_low,
             compress_config_tables=compress_config_tables,
             key_vec_size=key_vec_size,
             val_vec_size=val_vec_size,
@@ -405,7 +419,6 @@ class ModelRunner:
         kv_caches: KVCache,
         block_tables: Optional[torch.Tensor],
         kv_len_tables: Optional[torch.Tensor],
-        sparsity_tables: Optional[torch.Tensor],
         compress_config_tables: Optional[torch.Tensor],
         key_vec_size: Optional[int],
         val_vec_size: Optional[int],
@@ -422,7 +435,6 @@ class ModelRunner:
                 seq_group_metadata_list,
                 block_tables,
                 kv_len_tables,
-                sparsity_tables,
                 compress_config_tables,
                 key_vec_size=key_vec_size,
                 val_vec_size=val_vec_size)
@@ -433,7 +445,6 @@ class ModelRunner:
                 seq_group_metadata_list,
                 block_tables,
                 kv_len_tables,
-                sparsity_tables,
                 compress_config_tables,
                 key_vec_size=key_vec_size,
                 val_vec_size=val_vec_size)
@@ -495,12 +506,15 @@ class ModelRunner:
                 is_prompt=True,
                 seq_data={group_id: seq_data},
                 sampling_params=sampling_params,
-                attn_prune_thresh=0.0,
                 # dummpy inputs
                 num_bits_k_high=None,
                 num_bits_v_high=None,
                 num_bits_k_low=None,
                 num_bits_v_low=None,
+                num_chunks_k_high=None,
+                num_chunks_v_high=None,
+                num_chunks_k_low=None,
+                num_chunks_v_low=None,
             )
             seqs.append(seq)
 
@@ -509,7 +523,7 @@ class ModelRunner:
         kv_caches = None
         # dummpy inputs: key_vec_size & val_vec_size set to None
         self.execute_model(seqs, kv_caches, 
-                           None, None, None, None, None, None)
+                           None, None, None, None, None)
         torch.cuda.synchronize()
         return
 

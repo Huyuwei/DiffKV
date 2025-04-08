@@ -4,8 +4,19 @@ import numpy as np
 
 model_size = 32
 
+LOG_DIR = os.getenv('DIFFKV_LOG_DIR', '/home/zhangyanqi/git_repos/DiffKV/logs')
+AIME_ROLLOUT = 3
+AIME_NUM_PROBLEMS = 30
+
+def count_actual_problems(round_dir: str) -> int:
+    n: int = 0
+    for fn in os.listdir(round_dir):
+        if fn.startswith('eval_') and os.path.isdir(f'{round_dir}/{fn}'):
+            n += pd.read_csv(f'{round_dir}/{fn}/correctness.csv')['num_seqs'][0]
+    return n
+
 workloads = [
-    'minerva_math',
+    # 'minerva_math',
     'aime',
     'gpqa',
     ]
@@ -34,12 +45,11 @@ quant_configs = {
     ],
 }
 
-target_ratio = 10   # percent
 buffer = 64
-rounds = 5
+rounds = 15
 
 summary_dir = (
-    f'/home/zhangyanqi/Projects/eLLM/logs/per_token_thresh_compress_summary'
+    f'{LOG_DIR}/per_token_thresh_compress_summary'
     f'/kv_buffer_{buffer}/qwq-{model_size}b')
 
 os.makedirs(summary_dir, exist_ok=True)
@@ -47,12 +57,11 @@ os.makedirs(summary_dir, exist_ok=True)
 for workload in workloads:
     print(workload)
     
-    dir = (f'/home/zhangyanqi/Projects/eLLM/logs/per_token_thresh'
-           f'/qwq-{model_size}b/{workload}/')
+    dir = (f'{LOG_DIR}/per_token_thresh/qwq-{model_size}b/{workload}/')
     metric = metrics[workload]
     
     for high_k, high_v, low_k, low_v in quant_configs[workload]:
-        sub_dir = f'{dir}/k{high_k}v{high_v}_k{low_k}v{low_v}/target_{target_ratio}_buffer_{buffer}/'
+        sub_dir = f'{dir}/k{high_k}v{high_v}_k{low_k}v{low_v}/buffer_{buffer}/'
         all_prune_threshes = []
         prune_thresh_to_quant_thresh = {}   # indexed by prune_thresh
         
@@ -60,6 +69,8 @@ for workload in workloads:
         q_to_qstr = {}
         
         for params_f in os.listdir(sub_dir):
+            if not params_f.startswith('p'):
+                continue
             assert params_f.startswith('p')
             p_thresh_str, q_thresh_str = params_f.split('_')
             p_thresh = float(p_thresh_str.replace('p', ''))
@@ -92,7 +103,7 @@ for workload in workloads:
                 rounds_mem_usage = []
                 rounds_low_prec_ratio = []
                 
-                for round in range(rounds):
+                for round in range(rounds):                
                     p_thresh_str = p_to_pstr[p_thresh]
                     q_thresh_str = q_to_qstr[q_thresh]
                     
@@ -100,6 +111,13 @@ for workload in workloads:
                     if not os.path.isfile(csv_n):
                         print(f'Warning: {csv_n} does not exist')
                         continue
+                    
+                    if workload == 'aime':
+                        actual_problems = count_actual_problems(f'{sub_dir}/{p_thresh_str}_{q_thresh_str}/round_{round}')
+                        if actual_problems < AIME_NUM_PROBLEMS * AIME_ROLLOUT:
+                            print(f'Warning: Only {actual_problems} problems recorded, expected {AIME_NUM_PROBLEMS * AIME_ROLLOUT}, round_{round} data aborted')
+                            continue
+                    
                     df = pd.read_csv(csv_n)
                     rounds_low_prec_ratio.append(df['low_prec_ratio'][0])
                     rounds_mem_usage.append(df['compress_ratio'][0])

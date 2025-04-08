@@ -158,7 +158,8 @@ class MemoryManager:
         # FIXME(woosuk): Here we assume that all sequences in the group share
         # the same prompt. This may not be true for preempted sequences.
         seq = seq_group.get_seqs(status=SequenceStatus.WAITING)[0]
-        quant_config = seq_group.quant_configs[:2]
+        # use high precision to estimate required pages
+        quant_config = seq_group.quant_configs[:2] + seq_group.quant_groups[:2]
         assert quant_config in self.quant_to_block_size, f'quant {quant_config} not supported'
         block_size = self.quant_to_block_size[quant_config]
         num_prompt_tokens = seq.data.get_len()
@@ -427,6 +428,7 @@ class Scheduler:
         running_seq_ids: List[int] = []
         self.memory_manager.reset_estimated_free_blocks()
         sched_quant_config = None
+        sched_quant_groups = None
         while self.running:
             seq_group = self.running.pop(0)
             while not self.memory_manager.can_append_slot(seq_group):
@@ -447,12 +449,17 @@ class Scheduler:
                 running.append(seq_group)
                 if not sched_quant_config:
                     sched_quant_config = seq_group.quant_configs
+                    sched_quant_groups = seq_group.quant_groups           
         self._append_slot(
             seq_ids=running_seq_ids,
             kbits_high=sched_quant_config[0],
             vbits_high=sched_quant_config[1],
             kbits_low=sched_quant_config[2],
             vbits_low=sched_quant_config[3],
+            kgroups_high=sched_quant_groups[0],
+            vgroups_high=sched_quant_groups[1],
+            kgroups_low=sched_quant_groups[2],
+            vgroups_low=sched_quant_groups[3],
         )
         self.running = running
 
@@ -518,11 +525,14 @@ class Scheduler:
                 is_prompt=scheduler_outputs.prompt_run,
                 seq_data=seq_data,
                 sampling_params=seq_group.sampling_params,
-                attn_prune_thresh=seq_group.attn_prune_thresh,
                 num_bits_k_high=seq_group.quant_configs[0],
                 num_bits_v_high=seq_group.quant_configs[1],
                 num_bits_k_low=seq_group.quant_configs[2],
                 num_bits_v_low=seq_group.quant_configs[3],
+                num_chunks_k_high=seq_group.quant_groups[0],
+                num_chunks_v_high=seq_group.quant_groups[1],
+                num_chunks_k_low=seq_group.quant_groups[2],
+                num_chunks_v_low=seq_group.quant_groups[3],
             )
             seq_group_metadata_list.append(seq_group_metadata)
         return seq_group_metadata_list, scheduler_outputs
@@ -581,6 +591,10 @@ class Scheduler:
             vbits_high=seq_group.quant_configs[1],
             kbits_low=seq_group.quant_configs[2],
             vbits_low=seq_group.quant_configs[3],
+            kgroups_high=seq_group.quant_groups[0],
+            vgroups_high=seq_group.quant_groups[1],
+            kgroups_low=seq_group.quant_groups[2],
+            vgroups_low=seq_group.quant_groups[3],
             compress_config=compress_config,
         )
         for seq in seq_group.get_seqs(status=SequenceStatus.WAITING):
@@ -617,6 +631,10 @@ class Scheduler:
             vbits_high=seq_group.quant_configs[1],
             kbits_low=seq_group.quant_configs[2],
             vbits_low=seq_group.quant_configs[3],
+            kgroups_high=seq_group.quant_groups[0],
+            vgroups_high=seq_group.quant_groups[1],
+            kgroups_low=seq_group.quant_groups[2],
+            vgroups_low=seq_group.quant_groups[3],
             batch_compress_configs=batch_compress_configs,
         )
 
@@ -633,6 +651,10 @@ class Scheduler:
             vbits_high=seq_group.quant_configs[1],
             kbits_low=seq_group.quant_configs[2],
             vbits_low=seq_group.quant_configs[3],
+            kgroups_high=seq_group.quant_groups[0],
+            vgroups_high=seq_group.quant_groups[1],
+            kgroups_low=seq_group.quant_groups[2],
+            vgroups_low=seq_group.quant_groups[3],
         )
 
     def _append_slot(
@@ -642,6 +664,10 @@ class Scheduler:
         vbits_high: int,
         kbits_low: int,
         vbits_low: int,
+        kgroups_high: int,
+        vgroups_high: int,
+        kgroups_low: int,
+        vgroups_low: int,
     ) -> bool:
         return self.orchestrator.run_workers_bool_any(
             "append_slot_to_seqs",
@@ -650,6 +676,10 @@ class Scheduler:
             vbits_high=vbits_high,
             kbits_low=kbits_low,
             vbits_low=vbits_low,
+            kgroups_high=kgroups_high,
+            vgroups_high=vgroups_high,
+            kgroups_low=kgroups_low,
+            vgroups_low=vgroups_low,
         )
 
     def _preempt(

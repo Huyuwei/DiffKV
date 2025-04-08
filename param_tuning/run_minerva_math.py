@@ -8,6 +8,7 @@ import pandas as pd
 from typing import List, Tuple, Optional, Union
 import numpy as np
 import time
+import torch
 
 from vllm import EngineArgs, LLMEngine, RequestOutput
 
@@ -15,6 +16,8 @@ from vllm.dataset import (
     MinervaMathQuestion,
     MinervaMathDataset,
 )
+
+from util import maybe_destroy_process_group, get_quant_configs_and_groups
 
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -33,7 +36,8 @@ def add_math_questions(
     engine: LLMEngine,
     dataset: MinervaMathDataset,
     questions: List[MinervaMathQuestion],
-    quant_configs: List[Tuple[int]],
+    quant_configs: List[int],
+    quant_groups: List[int],
     compress_configs: List[float],
 ) -> None:
     global REQUEST_ID
@@ -43,8 +47,8 @@ def add_math_questions(
             request_id=str(REQUEST_ID),
             prompt=prompt,
             sampling_params=SamplingParams,
-            attn_prune_thresh=0.0,
             quant_configs=quant_configs, 
+            quant_groups=quant_groups,
             compress_configs=compress_configs,
         )
         dataset.register_request(question, str(REQUEST_ID))
@@ -102,13 +106,8 @@ def run_math_dataset(
     # # for debug 
     # dataset.data_ptr = 287113
     
-    if kbits_high == kbits_low and vbits_high == vbits_low:
-        quant_configs = [kbits_high, vbits_high]
-    else:
-        quant_configs = [kbits_high, vbits_high, 
-                         kbits_low, vbits_low]
-    # compress_configs = [kv_prune_thresh, kv_quant_thresh, 
-    #                     kv_prune_ratio, kv_quant_ratio]
+    quant_configs, quant_groups = get_quant_configs_and_groups(
+        kbits_high, vbits_high, kbits_low, vbits_low)
     compress_configs = [kv_prune_thresh, kv_quant_thresh]
         
     # disable real-time perf logging
@@ -127,7 +126,7 @@ def run_math_dataset(
         all_questions = all_questions[batch_size:]
         
         add_math_questions(
-            engine, dataset, questions, quant_configs, compress_configs)
+            engine, dataset, questions, quant_configs, quant_groups, compress_configs)
 
         while engine.has_unfinished_requests():
             request_outputs: List[RequestOutput] = engine.step()
@@ -199,6 +198,8 @@ def main(args: argparse.Namespace):
         kv_quant_thresh=args.kv_quant_thresh,
         prompt_type=prompt_type)
     print(f'--- time elapsed = {time.time() - t0}s ---')
+    
+    maybe_destroy_process_group()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

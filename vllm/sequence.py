@@ -240,8 +240,8 @@ class SequenceGroup:
         seqs: List[Sequence],
         sampling_params: SamplingParams,
         arrival_time: float,
-        attn_prune_thresh: float,
         quant_configs: List[int],
+        quant_groups: List[int],
         compress_configs: List[float],
     ) -> None:
         self.request_id = request_id
@@ -252,10 +252,6 @@ class SequenceGroup:
         
         # used in scheduler to decide how much memory is allocated to the group
         self.is_decode = False
-        
-        # attn compute sparsity configs
-        assert attn_prune_thresh >= 0, attn_prune_thresh
-        self.attn_prune_thresh = attn_prune_thresh
         
         # kv pruning configs
         # assert len(compress_configs) == 4
@@ -277,11 +273,14 @@ class SequenceGroup:
         
         # kv quantization configs
         assert len(quant_configs) == 2 or len(quant_configs) == 4
+        assert len(quant_configs) == len(quant_groups)
         self.quant_configs = tuple(quant_configs)
+        self.quant_groups = tuple(quant_groups)
         # pad the config if only 1 quant config is used
         if len(self.quant_configs) == 2:
             # self.quant_configs += [(0, 0)]
             self.quant_configs += self.quant_configs
+            self.quant_groups += self.quant_groups
             # assert _prune_thresh == _quant_thresh
             assert _prune_ratio == _quant_ratio
         else:
@@ -400,11 +399,14 @@ class SequenceGroupMetadata:
         is_prompt: bool,
         seq_data: Dict[int, SequenceData],
         sampling_params: SamplingParams,
-        attn_prune_thresh: Optional[float],
         num_bits_k_high: Optional[int],
         num_bits_v_high: Optional[int],
         num_bits_k_low: Optional[int],
         num_bits_v_low: Optional[int],
+        num_chunks_k_high: Optional[int],
+        num_chunks_v_high: Optional[int],
+        num_chunks_k_low: Optional[int],
+        num_chunks_v_low: Optional[int],
     ) -> None:
         '''
         NOTE: block_tables & kv_lens should be set on the worker side
@@ -415,11 +417,15 @@ class SequenceGroupMetadata:
         self.sampling_params = sampling_params
         self.slot_ids: List[int] = []
         # quant config
-        self.attn_prune_thresh = attn_prune_thresh
         self.num_bits_k_high = num_bits_k_high
         self.num_bits_v_high = num_bits_v_high
-        self.num_bits_k_low = num_bits_k_low
-        self.num_bits_v_low = num_bits_v_low
+        self.num_bits_k_low  = num_bits_k_low
+        self.num_bits_v_low  = num_bits_v_low
+        
+        self.num_chunks_k_high = num_chunks_k_high
+        self.num_chunks_v_high = num_chunks_v_high
+        self.num_chunks_k_low  = num_chunks_k_low
+        self.num_chunks_v_low  = num_chunks_v_low
 
 
 class SequenceOutput:

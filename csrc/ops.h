@@ -46,13 +46,15 @@ void sparse_paged_attention(
   float scale,
   torch::Tensor& block_tables,
   torch::Tensor& kv_len_tables,
-  torch::Tensor& sparsity_tables,
   int max_context_len,
-  float prune_thresh,
   int num_bits_k_high,
   int num_bits_v_high,
   int num_bits_k_low,
   int num_bits_v_low,
+  int meta_k_high,
+  int meta_v_high,
+  int meta_k_low,
+  int meta_v_low,
   int k_vec_size,
   int v_vec_size,
   int num_tokens_per_page_high,
@@ -117,3 +119,19 @@ torch::Tensor gptq_gemm(
 void gptq_shuffle(
   torch::Tensor q_weight,
   torch::Tensor q_perm);
+
+void static_scaled_fp8_quant(
+  torch::Tensor& out,
+  torch::Tensor const& input,
+  torch::Tensor const& scale);
+
+void dynamic_scaled_fp8_quant(
+  torch::Tensor& out,
+  torch::Tensor const& input,
+  torch::Tensor& scale);
+
+void dynamic_per_token_scaled_fp8_quant(
+    torch::Tensor& out,
+    torch::Tensor const& input,
+    torch::Tensor& scale,
+    std::optional<torch::Tensor> const& scale_ub);

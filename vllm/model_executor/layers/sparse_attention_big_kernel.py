@@ -131,7 +131,6 @@ class SparsePagedAttention(nn.Module):
         slot_ids = input_metadata.slot_ids
         block_tables = input_metadata.block_tables
         kv_len_tables = input_metadata.kv_len_tables
-        sparsity_tables = input_metadata.sparsity_tables
         compress_config_tables = input_metadata.compress_config_tables
 
         if input_metadata.is_prompt:
@@ -258,6 +257,10 @@ class SparsePagedAttention(nn.Module):
                         input_metadata.num_bits_v_high,
                         input_metadata.num_bits_k_low,
                         input_metadata.num_bits_v_low,
+                        input_metadata.num_chunks_k_high,
+                        input_metadata.num_chunks_v_high,
+                        input_metadata.num_chunks_k_low,
+                        input_metadata.num_chunks_v_low,
                         input_metadata.key_vec_size,
                         input_metadata.val_vec_size,
                         input_metadata.num_tokens_per_block_high,
@@ -272,7 +275,7 @@ class SparsePagedAttention(nn.Module):
                     # print(f'Softmax: {(1000 * (t2 - t1)):.2f} ms')
                     # print(f'compress_and_append_cache_prompt_phase: {(1000 * (t3 - t2)):.2f} ms')
                 else:
-                    # print(f'sparse_attn_big_kernel::max_prompt_len {max_prompt_len} > _PARTITION_SIZE_PROMPT {_PARTITION_SIZE_PROMPT}')
+                    print(f'sparse_attn_big_kernel::max_prompt_len {max_prompt_len} > _PARTITION_SIZE_PROMPT {_PARTITION_SIZE_PROMPT}')
                     
                     # process the scores in global memory instead of GPU shared memory in cuda kernels 
                     triton_score_sum = triton_score_sum.view(
@@ -317,6 +320,10 @@ class SparsePagedAttention(nn.Module):
                         input_metadata.num_bits_v_high,
                         input_metadata.num_bits_k_low,
                         input_metadata.num_bits_v_low,
+                        input_metadata.num_chunks_k_high,
+                        input_metadata.num_chunks_v_high,
+                        input_metadata.num_chunks_k_low,
+                        input_metadata.num_chunks_v_low,
                         input_metadata.key_vec_size,
                         input_metadata.val_vec_size,
                         input_metadata.num_tokens_per_block_high,
@@ -366,6 +373,10 @@ class SparsePagedAttention(nn.Module):
                 input_metadata.num_bits_v_high,
                 input_metadata.num_bits_k_low,
                 input_metadata.num_bits_v_low,
+                input_metadata.num_chunks_k_high,
+                input_metadata.num_chunks_v_high,
+                input_metadata.num_chunks_k_low,
+                input_metadata.num_chunks_v_low,
                 input_metadata.key_vec_size,
                 input_metadata.val_vec_size,
                 input_metadata.num_tokens_per_block_high,
@@ -387,9 +398,6 @@ class SparsePagedAttention(nn.Module):
             # TODO: we should optimize this
             tmp_scores = torch.empty((batch_size, self.num_heads, max_context_len),
                                       dtype=torch.float32, device=query.device)
-
-            # assert input_metadata.attn_prune_thresh >= 0 and input_metadata.attn_prune_thresh <= 1, input_metadata.attn_prune_thresh
-            assert input_metadata.attn_prune_thresh >= 0, input_metadata.attn_prune_thresh
 
             if max_context_len <= _PARTITION_SIZE:
                 num_partitions = 1
@@ -423,13 +431,15 @@ class SparsePagedAttention(nn.Module):
                 self.scale,
                 block_tables,
                 kv_len_tables,
-                sparsity_tables,
                 max_context_len,
-                input_metadata.attn_prune_thresh,
                 input_metadata.num_bits_k_high,
                 input_metadata.num_bits_v_high,
                 input_metadata.num_bits_k_low,
                 input_metadata.num_bits_v_low,
+                input_metadata.num_chunks_k_high,
+                input_metadata.num_chunks_v_high,
+                input_metadata.num_chunks_k_low,
+                input_metadata.num_chunks_v_low,
                 input_metadata.key_vec_size,
                 input_metadata.val_vec_size,
                 input_metadata.num_tokens_per_block_high,
